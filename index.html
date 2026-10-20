@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理員拍卡系統</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:Microsoft JhengHei, sans-serif; }
+html, body { background:#000; padding:12px; transition: background 0.8s ease; height:100%; overflow:hidden; }
+body { display:flex; align-items:center; justify-content:center; }
+html.on-duty, body.on-duty { background:#fff; }
+html.idle, body.idle { background:#000; }
+html.idle { scrollbar-color:#555 #000; }
+html.idle::-webkit-scrollbar { background:#000; }
+html.idle::-webkit-scrollbar-track { background:#000; }
+html.idle::-webkit-scrollbar-thumb { background:#555; border-radius:8px; }
+html.mouse-idle, html.mouse-idle * { cursor:none !important; }
+#clock { position:fixed; top:20px; right:20px; font-size:18px; color:#fff; z-index:999; font-weight:bold; }
+body.on-duty #clock { color:#000; }
+body.idle #clock { color:#fff; }
+.container { width:min(520px, 100%); height:auto; max-height:calc(100vh - 24px); margin:0 auto; background:rgba(72,255,236,0.15); border-radius:18px; padding:18px; overflow:hidden; transition: background 0.5s ease, border 0.5s ease, box-shadow 0.5s ease; }
+body.on-duty .container { border: 1px solid rgba(0,210,255,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+.title { font-size:22px; color:#0d8d8d; text-align:center; margin-bottom:18px; font-weight:bold; }
+input { width:100%; padding:12px; border-radius:12px; font-size:18px; margin-bottom:18px; border:1px solid #ddd; transition: all 0.3s ease; text-align: center; font-weight:bold; }
+input:focus { border-color: #00d2ff; outline: none; box-shadow: 0 0 10px rgba(0,210,255,0.3); }
+input:disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
+#checkBtn { position:relative; width:100%; height:64px; background:linear-gradient(135deg, #00d2ff, #3a7bd5); color:#fff; border:none; border-radius:16px; font-size:18px; opacity:0; display:none; transition:none; z-index:5; cursor: pointer; font-weight:bold; box-shadow: 0 4px 15px rgba(0,210,255,0.3); margin:0; }
+#checkBtn.show { display:block; opacity:1; }
+#checkBtn:disabled { background: #ccc; cursor: not-allowed; opacity: 0.5; box-shadow:none; }
+.hint-box { position:relative; width:100%; min-height:104px; margin-top:10px; }
+#autoHint { position:relative; width:100%; padding:12px; border-radius:12px; text-align:center; font-size:14px; font-weight:bold; transition:top 1.2s ease, background 0.5s ease, color 0.5s ease, border 0.5s ease; display:block; margin-top:8px; }
+#autoHint.closed { background:rgba(255,60,60,0.2); color:#c44; border:1px solid #f88; }
+#autoHint.open { background:linear-gradient(270deg, #00ff8f, #00d2ff); color:#fff; border:1px solid #fff; }
+#startLoading { display:block; margin-top:12px; padding:16px; border-radius:16px; background:#fff9e6; color:#e69500; text-align:center; font-weight:bold; font-size:16px; }
+.loader-icon { display:inline-block; width:18px; height:18px; border:2px solid #e69500; border-top-color:transparent; border-radius:50%; animation:loader-rotate 0.8s linear infinite; }
+@keyframes loader-rotate { to{transform:rotate(360deg)} }
+#loading { display: none; margin-top:12px; padding:16px; border-radius:16px; background:#fff9e6; color:#e69500; text-align:center; font-weight:bold; font-size:16px; }
+#message { margin-top:12px; padding:16px; border-radius: 12px; white-space: pre-line; font-weight:bold; line-height:1.6; }
+#message:empty { display:none; }
+#message.error { background:#fee; color:#c44; border: 1px solid #fcc; }
+#message.success { background:#efe; color:#084; border: 1px solid #cfc; }
+#attendancePanel { display:none; margin-top:12px; padding-top:12px; border-top:1px solid rgba(13,141,141,.25); }
+.attendance-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.attendance-title { color:#0d8d8d; font-size:18px; font-weight:bold; }
+.attendance-title::after { content:"  已到／未到"; color:#71808a; font-size:12px; font-weight:normal; }
+.attendance-summary { display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; margin-bottom:8px; }
+.attendance-count { padding:7px; border-radius:8px; text-align:center; background:rgba(255,255,255,.8); color:#345; font-size:13px; border:1px solid rgba(13,141,141,.12); }
+.attendance-count strong { display:block; font-size:20px; color:#0d8d8d; }
+.attendance-count.absent strong { color:#d25b45; }
+#attendanceList { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:4px; max-height:92px; overflow:hidden; }
+.attendance-row { display:block; min-width:0; padding:6px 7px; border-radius:6px; background:rgba(255,255,255,.8); color:#345; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-left:3px solid #d25b45; }
+.attendance-row small { display:block; color:#71808a; overflow:hidden; text-overflow:ellipsis; font-size:11px; }
+.attendance-status { grid-column:1 / -1; color:#71808a; text-align:center; padding:6px 4px; font-size:13px; }
+#top10Overlay { display:none; position:fixed; inset:0; z-index:1000; padding:68px 20px 20px; background:radial-gradient(circle at top, #17343b 0, #071013 42%, #000 100%); color:#fff; overflow:auto; isolation:isolate; }
+#top10Overlay.visible { display:flex; align-items:center; justify-content:center; }
+#top10Overlay.exiting { background:#000; }
+#top10Overlay.exiting .top10-panel { opacity:0; transform:scale(.98); transition:opacity .75s ease, transform .75s ease; }
+#top10Overlay::before { content:""; position:fixed; inset:-20%; z-index:-1; pointer-events:none; opacity:.8; background:radial-gradient(circle at 18% 24%, rgba(72,255,236,.34) 0 2px, transparent 4px),radial-gradient(circle at 78% 18%, rgba(245,197,66,.4) 0 2px, transparent 5px),radial-gradient(circle at 64% 78%, rgba(72,255,236,.3) 0 2px, transparent 4px),radial-gradient(circle at 28% 82%, rgba(255,255,255,.28) 0 1px, transparent 4px),radial-gradient(circle at 50% 42%, rgba(0,210,255,.16), transparent 28%),radial-gradient(circle at 50% 50%, rgba(72,255,236,.1), transparent 46%); background-size:240px 220px,310px 280px,280px 240px,190px 180px,100% 100%,100% 100%; animation:ranking-sparkle 5s ease-in-out infinite alternate; }
+@keyframes ranking-sparkle { 0% { opacity:.42; transform:scale(1) rotate(0deg); filter:brightness(.9); } 50% { opacity:.86; filter:brightness(1.3); } 100% { opacity:.58; transform:scale(1.06) rotate(2deg); filter:brightness(1.05); } }
+.top10-panel { width:min(1080px, 100%); max-height:100%; margin:0 auto; transition:opacity .35s ease, transform .35s ease; }
+.top10-title { color:#48ffec; text-align:center; font-size:30px; margin-bottom:8px; letter-spacing:1px; }
+.top10-subtitle { color:#9cb4b8; text-align:center; margin-bottom:24px; }
+.ranking-grid { display:block; }
+.ranking-card { min-width:0; padding:14px; border:1px solid #24434a; border-radius:12px; background:rgba(16,33,38,.92); }
+.ranking-card-title { color:#48ffec; font-size:18px; font-weight:bold; margin-bottom:10px; text-align:center; }
+.ranking-card .top10-list { gap:6px; }
+.top10-list { display:grid; gap:10px; }
+.top10-row { min-height:44px; display:grid; grid-template-columns:48px minmax(0, 1fr) auto; align-items:center; gap:10px; padding:9px 12px; border:1px solid #24434a; border-radius:10px; background:rgba(16,33,38,.92); font-size:16px; }
+.top10-row { animation:rank-staircase .38s cubic-bezier(.2,.8,.2,1) both; }
+.top10-row:nth-child(1) { animation-delay:.04s; }
+.top10-row:nth-child(2) { animation-delay:.12s; }
+.top10-row:nth-child(3) { animation-delay:.20s; }
+.top10-row:nth-child(4) { animation-delay:.28s; }
+.top10-row:nth-child(5) { animation-delay:.36s; }
+.top10-list.exiting .top10-row { animation:rank-block-exit .35s ease-in both; }
+.top10-list.exiting .top10-row:nth-child(1) { animation-delay:.03s; }
+.top10-list.exiting .top10-row:nth-child(2) { animation-delay:.09s; }
+.top10-list.exiting .top10-row:nth-child(3) { animation-delay:.15s; }
+.top10-list.exiting .top10-row:nth-child(4) { animation-delay:.21s; }
+.top10-list.exiting .top10-row:nth-child(5) { animation-delay:.27s; }
+@keyframes rank-staircase { from { opacity:0; transform:translateY(14px) scale(.94); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes rank-block-exit { from { opacity:1; transform:translateY(0) scale(1); } to { opacity:0; transform:translateY(-10px) scale(.94); } }
+.top10-row:nth-child(1) { border-color:#c9a227; }
+.top10-row:nth-child(2) { border-color:#9aa7ad; }
+.top10-row:nth-child(3) { border-color:#b9784d; }
+.top10-row:nth-child(1) .top10-rank { color:#f5c542; }
+.top10-row:nth-child(2) .top10-rank { color:#d9e1e5; }
+.top10-row:nth-child(3) .top10-rank { color:#d99467; }
+.top10-row:nth-child(4) .top10-rank, .top10-row:nth-child(5) .top10-rank { color:#48ffec; }
+.top10-rank { color:#48ffec; font-weight:bold; text-align:center; }
+.top10-count { color:#48ffec; font-weight:bold; white-space:nowrap; }
+.top10-status { text-align:center; color:#aaa; padding:24px; }
+@media (max-width:520px) { .container { width:100%; margin:0 auto; padding:28px 20px; } #top10Overlay { padding:58px 12px 16px; } .top10-title { font-size:24px; } .top10-subtitle { margin-bottom:16px; font-size:14px; } .top10-list { gap:8px; } .top10-row { min-height:48px; grid-template-columns:48px minmax(0, 1fr) auto; padding:10px 12px; font-size:16px; } .attendance-header { align-items:flex-start; } }
+</style>
+
+<div id="clock"></div>
+<div id="top10Overlay" aria-live="polite">
+  <div class="top10-panel">
+    <div class="top10-title">🏆當值龍虎榜 首五名</div>
+    <div class="top10-subtitle">拍卡即可激活系統</div>
+    <div id="rankingGrid" class="ranking-grid"><div class="top10-status">排行榜載入中…</div></div>
+  </div>
+</div>
+<div class="container">
+  <div class="title">管理員拍卡系統</div>
+  <input type="text" id="cardId" placeholder="請輸入卡號或學生號" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" lang="en" autofocus>
+  <div class="hint-box">
+    <button id="checkBtn">確認拍卡</button>
+    <div id="autoHint" class="closed">目前非當值時間，無法拍卡</div>
+    <div id="startLoading"><span class="loader-icon"></span> 系統同步設定中，請稍後…</div>
+  </div>
+  <div id="loading"><span class="loader-icon"></span> 系統處理中…</div>
+  <div id="message"></div>
+  <section id="attendancePanel" aria-live="polite">
+    <div class="attendance-header">
+      <div class="attendance-title">今日出勤狀況</div>
+    </div>
+    <div class="attendance-summary">
+      <div class="attendance-count">已到<strong id="presentCount">--</strong></div>
+      <div class="attendance-count absent">未到<strong id="absentCount">--</strong></div>
+    </div>
+    <div id="attendanceList"><div class="attendance-status">Coming Soon~</div></div>
+  </section>
+</div>
+
+<script>
+var canCheckIn = false; var currentMode = "";
+var isProcessing = false; 
+var idleTimer = null;
+var mouseIdleTimer = null;
+var top10Visible = false;
+var rankingRotationTimer = null;
+var rankingData = null;
+var rankingIndex = 0;
+var hideTop10Timer = null;
+var rankingTransitionTimer = null;
+var currentDutyStartTime = "";
+var currentCardId = "";
+var attendanceVisible = false;
+var localAttendance = loadLocalAttendance();
+var activeJsonpRequests = {};
+
+// ⚠️⚠️⚠️ 這是最重要的一行！請把下面的網址換成你 Google Apps Script 部署出來的新網址！ ⚠️⚠️⚠️
+var API = "https://script.google.com/macros/s/AKfycbxl_8N_0Vy_zgwRWislc4yyn5x2mg9S4V9AN9I6uh7JULeTigKHOdxACTD24Iwglm3n/exec";
+
+const htmlEl = document.documentElement; const bodyEl = document.body;
+const cardInput = document.getElementById("cardId"); const checkBtn = document.getElementById("checkBtn");
+const autoHint = document.getElementById("autoHint"); const startLoading = document.getElementById("startLoading");
+
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  htmlEl.classList.remove("idle"); bodyEl.classList.remove("idle");
+  hideTop10(true);
+  idleTimer = setTimeout(() => {
+    htmlEl.classList.add("idle"); bodyEl.classList.add("idle");
+    showTop10();
+  }, 60000);
+}
+
+function resetMouseIdleTimer() {
+  clearTimeout(mouseIdleTimer);
+  htmlEl.classList.remove("mouse-idle");
+  mouseIdleTimer = setTimeout(() => htmlEl.classList.add("mouse-idle"), 5000);
+}
+
+function hideTop10(immediate) {
+  top10Visible = false;
+  clearInterval(rankingRotationTimer);
+  rankingRotationTimer = null;
+  clearTimeout(rankingTransitionTimer);
+  rankingTransitionTimer = null;
+  rankingData = null;
+  rankingIndex = 0;
+  clearTimeout(hideTop10Timer);
+  var overlay = document.getElementById("top10Overlay");
+  if (!overlay.classList.contains("visible")) return;
+  if (immediate) {
+    overlay.classList.remove("visible", "exiting");
+    return;
+  }
+  overlay.classList.add("exiting");
+  hideTop10Timer = setTimeout(function() {
+    overlay.classList.remove("visible", "exiting");
+  }, 900);
+}
+
+function showTop10() {
+  if (isProcessing) return;
+  top10Visible = true;
+  clearTimeout(hideTop10Timer);
+  var overlay = document.getElementById("top10Overlay");
+  overlay.classList.remove("exiting");
+  overlay.classList.add("visible");
+  focusCardInput();
+  document.getElementById("rankingGrid").innerHTML = '<div class="top10-status">排行榜載入中…</div>';
+  sendJsonp(API + "?action=timeLogRankings&callback=handleTimeLogRankings&t=" + new Date().getTime(), "timeLogRankings");
+}
+
+var rankingDefinitions = [
+  { key: "septemberCount", title: "9月次數排名", unit: "次" },
+  { key: "septemberHours", title: "9月時數排名", unit: "小時" },
+  { key: "octoberCount", title: "10月次數排名", unit: "次" },
+  { key: "octoberHours", title: "10月時數排名", unit: "小時" },
+  { key: "yearCount", title: "全年總次數排名", unit: "次" },
+  { key: "yearHours", title: "全年總時數排名", unit: "小時" }
+];
+
+function getRankingItems(data, key) {
+  var source = data && (data[key] || (data.rankings && data.rankings[key]) || (data.data && data.data[key]));
+  if (!source) return [];
+  if (Array.isArray(source)) return source;
+  if (typeof source === "object") return Object.entries(source).map(([name, value]) => ({ name: name, value: value }));
+  return [];
+}
+
+function renderRankingItems(items, unit) {
+  if (!items.length || items.every(item => Number(item.value ?? item.count ?? item.hours ?? item.totalHours ?? item.minutes ?? 0) === 0)) {
+    return '<div class="top10-status">未有排名，敬請期待</div>';
+  }
+  return items.slice(0, 5).map((item, index) => {
+    var name = item.name || item.studentName || item.cardId || "未命名";
+    var value = item.value ?? item.count ?? item.hours ?? item.totalHours ?? item.minutes ?? 0;
+    return '<div class="top10-row"><div class="top10-rank">第 ' + (index + 1) + ' 名</div><div>' + name + '</div><div class="top10-count">' + value + ' ' + unit + '</div></div>';
+  }).join("");
+}
+
+function renderCurrentRanking() {
+  if (!top10Visible || !rankingData) return;
+  var definition = rankingDefinitions[rankingIndex];
+  var grid = document.getElementById("rankingGrid");
+  var currentList = grid.querySelector(".top10-list:not(.exiting)");
+  if (currentList && currentList.querySelector(".top10-row")) {
+    currentList.classList.add("exiting");
+    rankingTransitionTimer = setTimeout(function() {
+      if (!top10Visible) return;
+      grid.innerHTML = '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
+        '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit) + '</div></section>';
+      rankingIndex = (rankingIndex + 1) % rankingDefinitions.length;
+    }, 700);
+    return;
+  }
+  grid.innerHTML = '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
+    '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit) + '</div></section>';
+  rankingIndex = (rankingIndex + 1) % rankingDefinitions.length;
+}
+
+window.handleTimeLogRankings = function(data) {
+  if (!top10Visible) return;
+  var hasNewRankings = rankingDefinitions.some(definition => getRankingItems(data, definition.key).length);
+  if (!hasNewRankings) {
+    document.getElementById("rankingGrid").innerHTML = '<div class="top10-status">目前 API 尚未提供六項 Time Log 排名，請更新 Google Apps Script 部署版本</div>';
+    return;
+  }
+  rankingData = data;
+  rankingIndex = 0;
+  renderCurrentRanking();
+  clearInterval(rankingRotationTimer);
+  rankingRotationTimer = setInterval(renderCurrentRanking, 20000);
+};
+
+function focusCardInput() {
+  if (!cardInput.disabled) {
+    cardInput.focus();
+  }
+}
+
+focusCardInput();
+window.addEventListener("DOMContentLoaded", focusCardInput);
+window.addEventListener("load", focusCardInput);
+document.addEventListener("click", () => { resetIdleTimer(); cardInput.focus(); });
+document.addEventListener("keydown", event => {
+  var rankingWasVisible = top10Visible;
+  resetIdleTimer();
+  if (rankingWasVisible && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && document.activeElement !== cardInput && !cardInput.disabled) {
+    cardInput.focus();
+    cardInput.value += event.key;
+    event.preventDefault();
+  }
+}, true);
+cardInput.addEventListener("input", () => resetIdleTimer());
+document.addEventListener("mousemove", resetMouseIdleTimer);
+document.addEventListener("mousedown", resetMouseIdleTimer);
+document.addEventListener("click", resetMouseIdleTimer);
+
+function updateClock() {
+  var now = new Date();
+  document.getElementById("clock").innerText = String(now.getHours()).padStart(2,'0')+":"+String(now.getMinutes()).padStart(2,'0')+":"+String(now.getSeconds()).padStart(2,'0');
+}
+setInterval(updateClock, 1000); updateClock();
+
+function sendJsonp(url, requestKey) {
+  if (requestKey && activeJsonpRequests[requestKey]) {
+    return;
+  }
+  if (requestKey) {
+    activeJsonpRequests[requestKey] = true;
+  }
+  const script = document.createElement("script");
+  script.id = "jsonp-script-" + Date.now();
+  script.src = url;
+  script.onload = () => {
+    if (requestKey) delete activeJsonpRequests[requestKey];
+    script.remove();
+  };
+  script.onerror = () => {
+    if (requestKey) delete activeJsonpRequests[requestKey];
+    script.remove();
+    isProcessing = false;
+    setUiLock(false);
+    cardInput.value = "";
+    startLoading.style.display = "none";
+    showMessage("error", "⚠️ 無法連線至拍卡系統，請檢查 API 網址或部署權限。\n請確認 Google Apps Script 已部署為「任何人」可存取。");
+  };
+  document.body.appendChild(script);
+}
+
+function showAttendanceStatus(text) {
+  document.getElementById("attendanceList").innerHTML = '<div class="attendance-status">' + text + '</div>';
+}
+
+function getTodayKey() {
+  var now = new Date();
+  return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+}
+
+function loadLocalAttendance() {
+  try {
+    return JSON.parse(localStorage.getItem("attendance-" + getTodayKey()) || "[]");
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveLocalAttendance(data) {
+  localAttendance = localAttendance.filter(item => !(item.key === data.key && (item.period || "") === (data.period || "")));
+  localAttendance.push(data);
+  localStorage.setItem("attendance-" + getTodayKey(), JSON.stringify(localAttendance));
+}
+
+function renderLocalAttendance() {
+  document.getElementById("presentCount").innerText = localAttendance.length;
+  document.getElementById("absentCount").innerText = "--";
+  if (!localAttendance.length) {
+    showAttendanceStatus("Coming Soon~");
+    return;
+  }
+  showAttendanceStatus("Coming Soon~");
+}
+
+function recordCompletedAttendance(data) {
+  var key = String(currentCardId || data.cardId || data.studentId || data.name || "").trim().toLowerCase();
+  if (!key) return;
+  saveLocalAttendance({ key: key, name: data.name || currentCardId, time: data.time || "剛才", period: data.period || currentMode || "未記錄" });
+  renderLocalAttendance();
+}
+
+function getAttendanceItems(data, names) {
+  var source = data[names.find(name => Array.isArray(data[name]))] || [];
+  return source.map(item => typeof item === "string" ? { name: item } : item);
+}
+
+function normalizeAttendanceKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function getAttendanceKeyCandidates(item) {
+  if (!item) return [];
+  return Array.from(new Set([
+    item.key,
+    item.cardId,
+    item.studentId,
+    item.studentNum,
+    item.id,
+    item.name,
+    item.studentName,
+    item.className,
+    item.studentClass
+  ].filter(value => value !== undefined && value !== null && String(value).trim() !== "").map(normalizeAttendanceKey)));
+}
+
+function normalizePeriodName(value) {
+  return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
+function matchesCurrentPeriod(item) {
+  if (!currentMode) return true;
+  var itemPeriod = item && (item.period || item.mode || item.shift || item.timePeriod || item.currentMode || item["G"] || item["periodName"] || "");
+  if (!itemPeriod || String(itemPeriod).trim() === "") return false;
+  return normalizePeriodName(itemPeriod) === normalizePeriodName(currentMode);
+}
+
+function isInTodayLog(student, todayLog) {
+  if (!student || !todayLog || !todayLog.length) return false;
+  var studentKeys = getAttendanceKeyCandidates(student);
+  return todayLog.some(logItem => getAttendanceKeyCandidates(logItem).some(key => studentKeys.includes(key)));
+}
+
+function loadTodayAttendance() {
+  if (isProcessing) return;
+  attendanceVisible = true;
+  showAttendanceStatus("正在載入今日出勤資料…");
+  sendJsonp(API + "?action=todayAttendance&callback=handleTodayAttendance&t=" + new Date().getTime(), "todayAttendance");
+}
+
+window.handleTodayAttendance = function(data) {
+  if (!data || data.status === "error" || data.allow !== undefined && !data.students && !data.allStudents && !data.attendance) {
+    renderLocalAttendance();
+    showAttendanceStatus("Coming Soon~");
+    return;
+  }
+
+  var students = getAttendanceItems(data, ["students", "allStudents", "studentList"]).filter(item => matchesCurrentPeriod(item));
+  var present = getAttendanceItems(data, ["present", "checkedIn", "arrived", "today"]).filter(item => matchesCurrentPeriod(item));
+  var absent = getAttendanceItems(data, ["absent", "notArrived", "missing"]).filter(item => matchesCurrentPeriod(item));
+  var localTodayLog = localAttendance.filter(item => matchesCurrentPeriod(item));
+  var todayLog = present.concat(localTodayLog.map(item => ({ key: item.key, name: item.name, cardId: item.key, studentId: item.key, period: item.period || currentMode })));
+  var uniqueTodayLog = [];
+  var todayLogKeys = new Set();
+  todayLog.forEach(item => {
+    var keys = getAttendanceKeyCandidates(item);
+    if (!keys.length) {
+      return;
+    }
+    var isDuplicate = keys.some(key => todayLogKeys.has(key));
+    if (!isDuplicate) {
+      uniqueTodayLog.push(item);
+      keys.forEach(key => todayLogKeys.add(key));
+    }
+  });
+
+  if (!students.length && absent.length) {
+    students = absent;
+  }
+  if (students.length) {
+    absent = students.filter(item => !isInTodayLog(item, uniqueTodayLog));
+  } else if (absent.length) {
+    absent = absent.filter(item => !isInTodayLog(item, uniqueTodayLog));
+  }
+
+  var arrivedCount = uniqueTodayLog.length;
+  if (!students.length && absent.length === 0 && present.length === 0 && localAttendance.length === 0) {
+    document.getElementById("presentCount").innerText = "--";
+    document.getElementById("absentCount").innerText = "--";
+    showAttendanceStatus("Coming Soon~");
+    return;
+  }
+
+  document.getElementById("presentCount").innerText = arrivedCount || "--";
+  document.getElementById("absentCount").innerText = "--";
+  showAttendanceStatus("Coming Soon~");
+};
+
+function autoCheck() { if(!isProcessing) sendJsonp(API + "?callback=handleAutoCheck&t=" + new Date().getTime(), "autoCheck"); }
+
+window.handleAutoCheck = function(d) {
+  startLoading.style.display = "none"; autoHint.style.display = "block";
+  if (d.allow) {
+    document.getElementById("attendancePanel").style.display = "block";
+    canCheckIn = true; currentMode = d.mode;
+    htmlEl.classList.add("on-duty"); bodyEl.classList.add("on-duty");
+    if (!idleTimer) resetIdleTimer();
+    checkBtn.style.display = "block";
+    autoHint.innerText ="✅ 目前是" + currentMode + "當值時間，可以拍卡";
+    autoHint.classList.add("open"); autoHint.classList.remove("closed");
+    checkBtn.classList.add("show");
+  } else {
+    document.getElementById("attendancePanel").style.display = "none";
+    canCheckIn = false; htmlEl.classList.remove("on-duty"); bodyEl.classList.remove("on-duty");
+    checkBtn.classList.remove("show");
+    checkBtn.style.display = "none";
+    autoHint.innerText ="目前非當值時間，系統關閉"; autoHint.classList.remove("open"); autoHint.classList.add("closed");
+  }
+}
+resetIdleTimer();
+resetMouseIdleTimer();
+loadTodayAttendance();
+autoCheck(); setInterval(autoCheck, 10000);
+
+function setUiLock(isLocked) { cardInput.disabled = isLocked; checkBtn.disabled = isLocked; document.getElementById("loading").style.display = isLocked ? "block" : "none"; }
+
+function showMessage(type, text) {
+  let m = document.getElementById("message");
+  if (text === "") { m.className = ""; m.innerText = ""; } 
+  else { m.className = type; m.innerText = text; setTimeout(() => { if (m.innerText === text) { m.className = ""; m.innerText = ""; } }, type === "error" ? 6000 : 30000); }
+}
+
+function formatDutyTime(value) {
+  var text = String(value || "").trim();
+  var timeMatch = text.match(/(上午|下午)?\s*0?(\d{1,2}):(\d{2})/);
+  if (!timeMatch) return value || "未記錄";
+
+  var dateMatch = text.match(/(\d{4})\s*[年\/-]\s*(\d{1,2})\s*[月\/-]\s*(\d{1,2})日?/);
+  var now = new Date();
+  var date = dateMatch ? { year: Number(dateMatch[1]), month: Number(dateMatch[2]), day: Number(dateMatch[3]) } : { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
+  var hour = Number(timeMatch[2]);
+  var period = timeMatch[1];
+  if (!period) {
+    period = hour >= 12 ? "下午" : "上午";
+    if (hour > 12) hour -= 12;
+  }
+  return date.year + "年" + (date.month + "月" + date.day + "日 ") + period + hour + ":" + timeMatch[3];
+}
+
+function checkIn() {
+  if (isProcessing) return; 
+  if (!canCheckIn) { showMessage("error", "目前非當值時間，無法拍卡"); cardInput.value = ""; return; }
+  let card = cardInput.value.trim(); if (!card) { showMessage("error","請輸入卡號"); return; }
+  
+  isProcessing = true;
+  currentCardId = card;
+  setUiLock(true); showMessage("", "");
+  sendJsonp(API + "?cardId=" + encodeURIComponent(card) + "&callback=handleCheckIn&t=" + new Date().getTime(), "checkIn");
+}
+
+window.handleCheckIn = function(data) {
+  isProcessing = false; 
+  setUiLock(false);
+  if (data.status === "ok") { 
+    resetIdleTimer();
+    if (data.type === "start") {
+      currentDutyStartTime = data.time || "";
+      localStorage.setItem("dutyStart-" + currentCardId, currentDutyStartTime);
+      recordCompletedAttendance(data);
+      showMessage("success", "✅ " + data.msg + "\n\n姓名：" + data.name + "\n時段：" + data.period + "\n開始當值時間：" + formatDutyTime(data.time) );
+    } else {
+      var savedStartTime = localStorage.getItem("dutyStart-" + currentCardId) || "";
+      var startTime = data.startTime || currentDutyStartTime || savedStartTime || "未記錄";
+      showMessage("success", "🔚 " + data.msg + "\n\n姓名：" + data.name + "\n時段：" + data.period + "\n開始當值時間：" + formatDutyTime(startTime) + "\n結束當值時間：" + formatDutyTime(data.time) + "\n累計時數：" + data.mins + " 分鐘");
+      localStorage.removeItem("dutyStart-" + currentCardId);
+      currentDutyStartTime = "";
+    }
+    cardInput.value = ""; 
+    loadTodayAttendance();
+  } else { 
+    cardInput.value = "";
+    showMessage("error", data.msg); 
+  } 
+  cardInput.focus();
+}
+
+window.addEventListener('error', function(e) {
+  if(e.target && e.target.tagName === 'SCRIPT' && e.target.id.indexOf('jsonp-script-') === 0) {
+    isProcessing = false; setUiLock(false); cardInput.value = ""; startLoading.style.display = "none";
+    showMessage("error", "網絡故障，請聯絡系統管理員手動簽到/簽離。");
+  }
+}, true);
+
+function handleShortcut(e) {
+  if (e.key === "F5") {
+    e.preventDefault();
+    e.stopPropagation();
+    window.location.reload();
+  } else if (e.key === "F11") {
+    e.preventDefault();
+    e.stopPropagation();
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  }
+}
+
+checkBtn.onclick = checkIn;
+cardInput.onkeydown = e => {
+  handleShortcut(e);
+  if (e.key === "Enter") checkIn();
+};
+document.addEventListener("keydown", handleShortcut, true);
+</script>
