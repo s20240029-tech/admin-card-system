@@ -4,9 +4,9 @@
 <title>管理員拍卡系統</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; font-family:Microsoft JhengHei, sans-serif; }
-html, body { background:#000; padding:12px; transition: background 0.8s ease; height:100%; overflow:hidden; }
+html, body { background:#cbd8dc; padding:12px; transition: background 0.8s ease; height:100%; min-height:100vh; overflow:auto; }
 body { display:flex; align-items:center; justify-content:center; }
-html.on-duty, body.on-duty { background:#fff; }
+html.on-duty, body.on-duty { background:#d7e3e5; }
 html.idle, body.idle { background:#000; }
 html.idle { scrollbar-color:#555 #000; }
 html.idle::-webkit-scrollbar { background:#000; }
@@ -16,9 +16,12 @@ html.mouse-idle, html.mouse-idle * { cursor:none !important; }
 #clock { position:fixed; top:20px; right:20px; font-size:18px; color:#fff; z-index:999; font-weight:bold; }
 body.on-duty #clock { color:#000; }
 body.idle #clock { color:#fff; }
-.container { width:min(520px, 100%); height:auto; max-height:calc(100vh - 24px); margin:0 auto; background:rgba(72,255,236,0.15); border-radius:18px; padding:18px; overflow:hidden; transition: background 0.5s ease, border 0.5s ease, box-shadow 0.5s ease; }
-body.on-duty .container { border: 1px solid rgba(0,210,255,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-.title { font-size:22px; color:#0d8d8d; text-align:center; margin-bottom:18px; font-weight:bold; }
+#versionLabel { position:fixed; left:20px; bottom:16px; color:#71808a; font-size:13px; font-weight:bold; letter-spacing:.3px; z-index:1001; }
+body.on-duty #versionLabel { color:#52656b; }
+body.idle #versionLabel { color:#aaa; }
+.container { width:min(520px, calc(100% - 96px)); height:auto; max-height:calc(100vh - 24px); margin:0 auto; background:rgba(110,205,230,.34); border-radius:18px; padding:18px; overflow:hidden; transition: background 0.5s ease, border 0.5s ease, box-shadow 0.5s ease; }
+body.on-duty .container { border:1px solid rgba(255,255,255,.32); box-shadow:0 10px 30px rgba(20,45,55,.24); }
+.title { font-size:22px; color:#164b52; text-align:center; margin-bottom:18px; font-weight:bold; }
 input { width:100%; padding:12px; border-radius:12px; font-size:18px; margin-bottom:18px; border:1px solid #ddd; transition: all 0.3s ease; text-align: center; font-weight:bold; }
 input:focus { border-color: #00d2ff; outline: none; box-shadow: 0 0 10px rgba(0,210,255,0.3); }
 input:disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
@@ -51,6 +54,9 @@ input:disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
 .attendance-status { grid-column:1 / -1; color:#71808a; text-align:center; padding:6px 4px; font-size:13px; }
 #top10Overlay { display:none; position:fixed; inset:0; z-index:1000; padding:68px 20px 20px; background:radial-gradient(circle at top, #17343b 0, #071013 42%, #000 100%); color:#fff; overflow:auto; isolation:isolate; }
 #top10Overlay.visible { display:flex; align-items:center; justify-content:center; }
+#rankingSystemStatus { position:fixed; top:20px; left:22px; z-index:2; padding:8px 13px; border:1px solid rgba(156,180,184,.45); border-radius:8px; color:#c8d5d8; background:rgba(7,16,19,.7); font-size:14px; font-weight:bold; letter-spacing:.3px; }
+#rankingSystemStatus.open { color:#72ffb4; border-color:rgba(114,255,180,.65); }
+#rankingSystemStatus.closed { color:#ff9b9b; border-color:rgba(255,155,155,.65); }
 #top10Overlay.exiting { background:#000; }
 #top10Overlay.exiting .top10-panel { opacity:0; transform:scale(.98); transition:opacity .75s ease, transform .75s ease; }
 #top10Overlay::before { content:""; position:fixed; inset:-20%; z-index:-1; pointer-events:none; opacity:.8; background:radial-gradient(circle at 18% 24%, rgba(72,255,236,.34) 0 2px, transparent 4px),radial-gradient(circle at 78% 18%, rgba(245,197,66,.4) 0 2px, transparent 5px),radial-gradient(circle at 64% 78%, rgba(72,255,236,.3) 0 2px, transparent 4px),radial-gradient(circle at 28% 82%, rgba(255,255,255,.28) 0 1px, transparent 4px),radial-gradient(circle at 50% 42%, rgba(0,210,255,.16), transparent 28%),radial-gradient(circle at 50% 50%, rgba(72,255,236,.1), transparent 46%); background-size:240px 220px,310px 280px,280px 240px,190px 180px,100% 100%,100% 100%; animation:ranking-sparkle 5s ease-in-out infinite alternate; }
@@ -58,7 +64,7 @@ input:disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
 .top10-panel { width:min(1080px, 100%); max-height:100%; margin:0 auto; transition:opacity .35s ease, transform .35s ease; }
 .top10-title { color:#48ffec; text-align:center; font-size:30px; margin-bottom:8px; letter-spacing:1px; }
 .top10-subtitle { color:#9cb4b8; text-align:center; margin-bottom:24px; }
-.ranking-grid { display:block; }
+.ranking-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
 .ranking-card { min-width:0; padding:14px; border:1px solid #24434a; border-radius:12px; background:rgba(16,33,38,.92); }
 .ranking-card-title { color:#48ffec; font-size:18px; font-weight:bold; margin-bottom:10px; text-align:center; }
 .ranking-card .top10-list { gap:6px; }
@@ -86,13 +92,71 @@ input:disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
 .top10-row:nth-child(3) .top10-rank { color:#d99467; }
 .top10-row:nth-child(4) .top10-rank, .top10-row:nth-child(5) .top10-rank { color:#48ffec; }
 .top10-rank { color:#48ffec; font-weight:bold; text-align:center; }
-.top10-count { color:#48ffec; font-weight:bold; white-space:nowrap; }
+.top10-row:nth-child(1) { box-shadow:inset 3px 0 0 #f5c542, inset 0 1px 0 rgba(255,255,255,.2), 0 8px 20px rgba(245,197,66,.12); }
+.top10-row:nth-child(2) { box-shadow:inset 3px 0 0 #d9e1e5, inset 0 1px 0 rgba(255,255,255,.2), 0 8px 20px rgba(217,225,229,.1); }
+.top10-row:nth-child(3) { box-shadow:inset 3px 0 0 #d99467, inset 0 1px 0 rgba(255,255,255,.2), 0 8px 20px rgba(217,148,103,.1); }
+.top10-count { color:#48ffec; font-size:20px; font-weight:bold; white-space:nowrap; }
+.rank-change { margin-left:8px; font-size:13px; font-weight:bold; }
+.rank-change.up { color:#72ffb4; }
+.rank-change.down { color:#ff9b9b; }
+.rank-change.new { color:#f5c542; }
 .top10-status { text-align:center; color:#aaa; padding:24px; }
+/* Glass surface system */
+.container, input, #checkBtn, #autoHint, #startLoading, #loading, #message, .attendance-count, .attendance-row, .ranking-card, .top10-row {
+  border:1px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.12);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2), 0 12px 32px rgba(0,0,0,.18);
+  backdrop-filter:blur(18px) saturate(135%);
+  -webkit-backdrop-filter:blur(18px) saturate(135%);
+}
+.container { background:linear-gradient(145deg,rgba(110,220,240,.48),rgba(50,135,195,.3)); border-color:rgba(255,255,255,.62); box-shadow:inset 0 1px 0 rgba(255,255,255,.78), inset 0 -1px 0 rgba(0,100,160,.18), 0 18px 42px rgba(20,85,125,.3); }
+input { color:#17343b; background:rgba(255,255,255,.62); border-color:rgba(221,221,221,.8); }
+input::placeholder { color:rgba(23,52,59,.62); }
+input:disabled { background:rgba(240,240,240,.5); }
+#checkBtn { background:linear-gradient(135deg,rgba(0,210,255,.82),rgba(58,123,213,.78)); border-color:rgba(255,255,255,.4); }
+#checkBtn:disabled { background:rgba(75,120,145,.35); }
+#autoHint.closed, #autoHint.open, #startLoading, #loading, #message.error, #message.success { background:rgba(255,255,255,.14); }
+#autoHint.closed { color:#c44; background:rgba(255,60,60,.2); border-color:#f88; }
+#autoHint.open { color:#fff; background:linear-gradient(270deg,rgba(0,255,143,.82),rgba(0,210,255,.78)); border-color:#fff; }
+#startLoading, #loading { color:#e69500; background:rgba(255,249,230,.72); border-color:rgba(230,149,0,.32); }
+#message.error { color:#c44; background:rgba(255,238,238,.72); border-color:#fcc; }
+#message.success { color:#084; background:rgba(238,255,238,.72); border-color:#cfc; }
+.attendance-count, .attendance-row { background:rgba(255,255,255,.58); border-color:rgba(13,141,141,.2); }
+.ranking-card { background:rgba(16,33,38,.72); border-color:#24434a; }
+.top10-row { background:rgba(16,33,38,.78); }
+.top10-row:nth-child(1) { background:rgba(245,197,66,.18); }
+.top10-row:nth-child(2) { background:rgba(180,200,215,.18); }
+.top10-row:nth-child(3) { background:rgba(185,120,77,.18); }
+.top10-row:nth-child(4), .top10-row:nth-child(5) { background:rgba(72,255,236,.12); }
+.top10-status { color:#aaa; background:rgba(16,33,38,.58); border:1px solid rgba(255,255,255,.18); border-radius:10px; backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+@media (max-width:700px) { .ranking-grid { grid-template-columns:1fr; } }
 @media (max-width:520px) { .container { width:100%; margin:0 auto; padding:28px 20px; } #top10Overlay { padding:58px 12px 16px; } .top10-title { font-size:24px; } .top10-subtitle { margin-bottom:16px; font-size:14px; } .top10-list { gap:8px; } .top10-row { min-height:48px; grid-template-columns:48px minmax(0, 1fr) auto; padding:10px 12px; font-size:16px; } .attendance-header { align-items:flex-start; } }
+@media (max-width:520px), (max-height:600px) {
+  html, body { padding:8px; }
+  body { align-items:center; }
+  #clock { top:8px; right:10px; font-size:14px; }
+  .container { width:calc(100% - 48px); max-height:calc(100vh - 16px); padding:14px; overflow-y:auto; }
+  .title { font-size:20px; margin-bottom:12px; }
+  input { padding:10px; margin-bottom:12px; font-size:16px; }
+  #checkBtn { height:56px; font-size:16px; }
+  .hint-box { min-height:88px; }
+  #autoHint { padding:10px; font-size:13px; }
+  #top10Overlay { padding:48px 8px 10px; }
+  .top10-panel { width:100%; }
+  .top10-title { font-size:22px; }
+  .top10-subtitle { margin-bottom:12px; font-size:13px; }
+  .ranking-card { padding:10px; }
+  .ranking-card-title { font-size:16px; }
+  .top10-row { min-height:42px; padding:8px 10px; font-size:14px; }
+  .top10-count { font-size:17px; }
+  #rankingSystemStatus { top:8px; left:10px; padding:6px 9px; font-size:12px; }
+}
 </style>
 
 <div id="clock"></div>
+<div id="versionLabel">v3.1.2</div>
 <div id="top10Overlay" aria-live="polite">
+  <div id="rankingSystemStatus">系統狀態同步中…</div>
   <div class="top10-panel">
     <div class="top10-title">🏆當值龍虎榜 首五名</div>
     <div class="top10-subtitle">拍卡即可激活系統</div>
@@ -130,6 +194,7 @@ var top10Visible = false;
 var rankingRotationTimer = null;
 var rankingData = null;
 var rankingIndex = 0;
+var rankingHistory = {};
 var hideTop10Timer = null;
 var rankingTransitionTimer = null;
 var currentDutyStartTime = "";
@@ -144,6 +209,12 @@ var API = "https://script.google.com/macros/s/AKfycbxl_8N_0Vy_zgwRWislc4yyn5x2mg
 const htmlEl = document.documentElement; const bodyEl = document.body;
 const cardInput = document.getElementById("cardId"); const checkBtn = document.getElementById("checkBtn");
 const autoHint = document.getElementById("autoHint"); const startLoading = document.getElementById("startLoading");
+const rankingSystemStatus = document.getElementById("rankingSystemStatus");
+
+function updateRankingSystemStatus(isOpen) {
+  rankingSystemStatus.className = isOpen ? "open" : "closed";
+  rankingSystemStatus.innerText = isOpen ? "系統已開啟" : "系統未開啟";
+}
 
 function resetIdleTimer() {
   clearTimeout(idleTimer);
@@ -199,8 +270,16 @@ var rankingDefinitions = [
   { key: "septemberHours", title: "9月時數排名", unit: "小時" },
   { key: "octoberCount", title: "10月次數排名", unit: "次" },
   { key: "octoberHours", title: "10月時數排名", unit: "小時" },
+  { key: "novemberCount", title: "11月次數排名", unit: "次" },
+  { key: "novemberHours", title: "11月時數排名", unit: "小時" },
   { key: "yearCount", title: "全年總次數排名", unit: "次" },
   { key: "yearHours", title: "全年總時數排名", unit: "小時" }
+];
+var rankingGroups = [
+  [rankingDefinitions[0], rankingDefinitions[1]],
+  [rankingDefinitions[2], rankingDefinitions[3]],
+  [rankingDefinitions[4], rankingDefinitions[5]],
+  [rankingDefinitions[6], rankingDefinitions[7]]
 ];
 
 function getRankingItems(data, key) {
@@ -211,42 +290,59 @@ function getRankingItems(data, key) {
   return [];
 }
 
-function renderRankingItems(items, unit) {
+function getRankingChange(name, rank, key) {
+  var previous = rankingHistory[key] && rankingHistory[key][name];
+  if (previous === undefined) return '';
+  if (previous > rank) return '<span class="rank-change up">↑</span>';
+  if (previous < rank) return '<span class="rank-change down">↓</span>';
+  return '';
+}
+
+function renderRankingItems(items, unit, key) {
   if (!items.length || items.every(item => Number(item.value ?? item.count ?? item.hours ?? item.totalHours ?? item.minutes ?? 0) === 0)) {
     return '<div class="top10-status">未有排名，敬請期待</div>';
   }
-  return items.slice(0, 5).map((item, index) => {
+  var visibleItems = items.slice(0, 5);
+  var currentRanks = {};
+  var markup = visibleItems.map((item, index) => {
     var name = item.name || item.studentName || item.cardId || "未命名";
     var value = item.value ?? item.count ?? item.hours ?? item.totalHours ?? item.minutes ?? 0;
-    return '<div class="top10-row"><div class="top10-rank">第 ' + (index + 1) + ' 名</div><div>' + name + '</div><div class="top10-count">' + value + ' ' + unit + '</div></div>';
+    currentRanks[name] = index + 1;
+    return '<div class="top10-row"><div class="top10-rank">第 ' + (index + 1) + ' 名</div><div>' + name + getRankingChange(name, index + 1, key) + '</div><div class="top10-count">' + value + ' ' + unit + '</div></div>';
   }).join("");
+  rankingHistory[key] = currentRanks;
+  return markup;
 }
 
 function renderCurrentRanking() {
   if (!top10Visible || !rankingData) return;
-  var definition = rankingDefinitions[rankingIndex];
+  var group = rankingGroups[rankingIndex];
   var grid = document.getElementById("rankingGrid");
-  var currentList = grid.querySelector(".top10-list:not(.exiting)");
-  if (currentList && currentList.querySelector(".top10-row")) {
-    currentList.classList.add("exiting");
+  var currentLists = Array.from(grid.querySelectorAll(".top10-list:not(.exiting)"));
+  if (currentLists.some(function(list) { return list.querySelector(".top10-row"); })) {
+    currentLists.forEach(function(list) { list.classList.add("exiting"); });
     rankingTransitionTimer = setTimeout(function() {
       if (!top10Visible) return;
-      grid.innerHTML = '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
-        '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit) + '</div></section>';
-      rankingIndex = (rankingIndex + 1) % rankingDefinitions.length;
+      grid.innerHTML = group.map(function(definition) {
+        return '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
+          '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit, definition.key) + '</div></section>';
+      }).join("");
+      rankingIndex = (rankingIndex + 1) % rankingGroups.length;
     }, 700);
     return;
   }
-  grid.innerHTML = '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
-    '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit) + '</div></section>';
-  rankingIndex = (rankingIndex + 1) % rankingDefinitions.length;
+  grid.innerHTML = group.map(function(definition) {
+    return '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
+      '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit, definition.key) + '</div></section>';
+  }).join("");
+  rankingIndex = (rankingIndex + 1) % rankingGroups.length;
 }
 
 window.handleTimeLogRankings = function(data) {
   if (!top10Visible) return;
   var hasNewRankings = rankingDefinitions.some(definition => getRankingItems(data, definition.key).length);
   if (!hasNewRankings) {
-    document.getElementById("rankingGrid").innerHTML = '<div class="top10-status">目前 API 尚未提供六項 Time Log 排名，請更新 Google Apps Script 部署版本</div>';
+    document.getElementById("rankingGrid").innerHTML = '<div class="top10-status">目前 API 尚未提供排名資料，請更新 Google Apps Script 部署版本</div>';
     return;
   }
   rankingData = data;
@@ -453,6 +549,7 @@ function autoCheck() { if(!isProcessing) sendJsonp(API + "?callback=handleAutoCh
 window.handleAutoCheck = function(d) {
   startLoading.style.display = "none"; autoHint.style.display = "block";
   if (d.allow) {
+    updateRankingSystemStatus(true);
     document.getElementById("attendancePanel").style.display = "block";
     canCheckIn = true; currentMode = d.mode;
     htmlEl.classList.add("on-duty"); bodyEl.classList.add("on-duty");
@@ -462,6 +559,7 @@ window.handleAutoCheck = function(d) {
     autoHint.classList.add("open"); autoHint.classList.remove("closed");
     checkBtn.classList.add("show");
   } else {
+    updateRankingSystemStatus(false);
     document.getElementById("attendancePanel").style.display = "none";
     canCheckIn = false; htmlEl.classList.remove("on-duty"); bodyEl.classList.remove("on-duty");
     checkBtn.classList.remove("show");
