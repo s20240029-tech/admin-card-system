@@ -154,7 +154,7 @@ input:disabled { background:rgba(240,240,240,.5); }
 </style>
 
 <div id="clock"></div>
-<div id="versionLabel">v3.1.2</div>
+<div id="versionLabel">v3.1.3</div>
 <div id="top10Overlay" aria-live="polite">
   <div id="rankingSystemStatus">系統狀態同步中…</div>
   <div class="top10-panel">
@@ -432,7 +432,7 @@ function saveLocalAttendance(data) {
 }
 
 function renderLocalAttendance() {
-  document.getElementById("presentCount").innerText = localAttendance.length;
+  document.getElementById("presentCount").innerText = "--";
   document.getElementById("absentCount").innerText = "--";
   if (!localAttendance.length) {
     showAttendanceStatus("Coming Soon~");
@@ -531,7 +531,6 @@ window.handleTodayAttendance = function(data) {
     absent = absent.filter(item => !isInTodayLog(item, uniqueTodayLog));
   }
 
-  var arrivedCount = uniqueTodayLog.length;
   if (!students.length && absent.length === 0 && present.length === 0 && localAttendance.length === 0) {
     document.getElementById("presentCount").innerText = "--";
     document.getElementById("absentCount").innerText = "--";
@@ -539,7 +538,7 @@ window.handleTodayAttendance = function(data) {
     return;
   }
 
-  document.getElementById("presentCount").innerText = arrivedCount || "--";
+  document.getElementById("presentCount").innerText = "--";
   document.getElementById("absentCount").innerText = "--";
   showAttendanceStatus("Coming Soon~");
 };
@@ -570,7 +569,8 @@ window.handleAutoCheck = function(d) {
 resetIdleTimer();
 resetMouseIdleTimer();
 loadTodayAttendance();
-autoCheck(); setInterval(autoCheck, 10000);
+var AUTO_CHECK_INTERVAL = 10000;
+autoCheck(); setInterval(autoCheck, AUTO_CHECK_INTERVAL);
 
 function setUiLock(isLocked) { cardInput.disabled = isLocked; checkBtn.disabled = isLocked; document.getElementById("loading").style.display = isLocked ? "block" : "none"; }
 
