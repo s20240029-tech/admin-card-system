@@ -12,7 +12,6 @@ html.idle { scrollbar-color:#555 #000; }
 html.idle::-webkit-scrollbar { background:#000; }
 html.idle::-webkit-scrollbar-track { background:#000; }
 html.idle::-webkit-scrollbar-thumb { background:#555; border-radius:8px; }
-html.mouse-idle, html.mouse-idle * { cursor:none !important; }
 #clock { position:fixed; top:20px; right:20px; font-size:18px; color:#000; z-index:999; font-weight:bold; }
 body.on-duty #clock { color:#000; }
 body.idle #clock { color:#000; }
@@ -68,8 +67,11 @@ input:disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
 .top10-title { color:#48ffec; text-align:center; font-size:30px; margin-bottom:8px; letter-spacing:1px; }
 .top10-subtitle { color:#9cb4b8; text-align:center; margin-bottom:24px; }
 .ranking-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
+.ranking-card-wide { grid-column:1 / -1; }
 .ranking-card { min-width:0; padding:14px; border:1px solid #24434a; border-radius:12px; background:rgba(16,33,38,.92); }
 .ranking-card-title { color:#48ffec; font-size:18px; font-weight:bold; margin-bottom:10px; text-align:center; }
+.ranking-metrics { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+.ranking-metric-title { color:#9cb4b8; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:center; }
 .ranking-card .top10-list { gap:6px; }
 .top10-list { display:grid; gap:10px; }
 .top10-row { min-height:44px; display:grid; grid-template-columns:48px minmax(0, 1fr) auto; align-items:center; gap:10px; padding:9px 12px; border:1px solid #24434a; border-radius:10px; background:rgba(16,33,38,.92); font-size:16px; }
@@ -158,7 +160,7 @@ input:disabled { background:rgba(240,240,240,.5); }
 </style>
 
 <div id="clock"></div>
-<div id="versionLabel">v3.2.2</div>
+<div id="versionLabel">v3.3.1</div>
 <div id="top10Overlay" aria-live="polite">
   <div id="rankingSystemStatus">系統狀態同步中…</div>
   <div id="rankingScheduleCountdown" aria-live="polite"></div>
@@ -170,7 +172,7 @@ input:disabled { background:rgba(240,240,240,.5); }
 </div>
 <div class="container">
   <div class="title">管理員拍卡系統</div>
-  <input type="text" id="cardId" placeholder="請輸入卡號或學生號" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" lang="en" autofocus>
+  <input type="text" id="cardId" placeholder="請輸入卡號或學生號" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="numeric" pattern="[0-9]*" lang="en" autofocus>
   <div class="hint-box">
     <button id="checkBtn">確認拍卡</button>
     <div id="autoHint" class="closed">目前非當值時間，無法拍卡</div>
@@ -194,7 +196,6 @@ input:disabled { background:rgba(240,240,240,.5); }
 var canCheckIn = false; var currentMode = "";
 var isProcessing = false; 
 var idleTimer = null;
-var mouseIdleTimer = null;
 var top10Visible = false;
 var rankingRotationTimer = null;
 var rankingData = null;
@@ -288,12 +289,6 @@ function resetIdleTimer() {
   }, 60000);
 }
 
-function resetMouseIdleTimer() {
-  clearTimeout(mouseIdleTimer);
-  htmlEl.classList.remove("mouse-idle");
-  mouseIdleTimer = setTimeout(() => htmlEl.classList.add("mouse-idle"), 5000);
-}
-
 function hideTop10(immediate) {
   top10Visible = false;
   bodyEl.classList.remove("top10-visible");
@@ -330,20 +325,26 @@ function showTop10() {
 }
 
 var rankingDefinitions = [
-  { key: "septemberCount", title: "9月次數排名", unit: "次" },
-  { key: "septemberHours", title: "9月時數排名", unit: "小時" },
-  { key: "octoberCount", title: "10月次數排名", unit: "次" },
-  { key: "octoberHours", title: "10月時數排名", unit: "小時" },
-  { key: "novemberCount", title: "11月次數排名", unit: "次" },
-  { key: "novemberHours", title: "11月時數排名", unit: "小時" },
-  { key: "yearCount", title: "全年總次數排名", unit: "次" },
-  { key: "yearHours", title: "全年總時數排名", unit: "小時" }
+  { key: "septemberCount", title: "次數排名", unit: "次" },
+  { key: "septemberHours", title: "時數排名", unit: "小時" },
+  { key: "octoberCount", title: "次數排名", unit: "次" },
+  { key: "octoberHours", title: "時數排名", unit: "小時" },
+  { key: "novemberCount", title: "次數排名", unit: "次" },
+  { key: "novemberHours", title: "時數排名", unit: "小時" },
+  { key: "yearCount", title: "次數排名", unit: "次" },
+  { key: "yearHours", title: "時數排名", unit: "小時" }
 ];
 var rankingGroups = [
-  [rankingDefinitions[0], rankingDefinitions[1]],
-  [rankingDefinitions[2], rankingDefinitions[3]],
-  [rankingDefinitions[4], rankingDefinitions[5]],
-  [rankingDefinitions[6], rankingDefinitions[7]]
+  { cards: [
+    { title: "9月", metrics: [rankingDefinitions[0], rankingDefinitions[1]] },
+    { title: "10月", metrics: [rankingDefinitions[2], rankingDefinitions[3]] }
+  ] },
+  { cards: [
+    { title: "11月", metrics: [rankingDefinitions[4], rankingDefinitions[5]] }
+  ] },
+  { cards: [
+    { title: "全年", metrics: [rankingDefinitions[6], rankingDefinitions[7]] }
+  ] }
 ];
 
 function getRankingItems(data, key) {
@@ -387,19 +388,25 @@ function renderCurrentRanking() {
     currentLists.forEach(function(list) { list.classList.add("exiting"); });
     rankingTransitionTimer = setTimeout(function() {
       if (!top10Visible) return;
-      grid.innerHTML = group.map(function(definition) {
-        return '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
-          '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit, definition.key) + '</div></section>';
-      }).join("");
+      grid.innerHTML = renderRankingGroups(group);
       rankingIndex = (rankingIndex + 1) % rankingGroups.length;
     }, 700);
     return;
   }
-  grid.innerHTML = group.map(function(definition) {
-    return '<section class="ranking-card"><div class="ranking-card-title">' + definition.title +
-      '</div><div class="top10-list">' + renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit, definition.key) + '</div></section>';
-  }).join("");
+  grid.innerHTML = renderRankingGroups(group);
   rankingIndex = (rankingIndex + 1) % rankingGroups.length;
+}
+
+function renderRankingGroups(group) {
+  return group.cards.map(function(card) {
+    return '<section class="ranking-card' + (group.cards.length === 1 ? ' ranking-card-wide' : '') + '">' +
+      '<div class="ranking-card-title">' + card.title + '</div><div class="ranking-metrics">' +
+      card.metrics.map(function(definition) {
+        return '<div><div class="ranking-metric-title">' + definition.title + '</div><div class="top10-list">' +
+          renderRankingItems(getRankingItems(rankingData, definition.key), definition.unit, definition.key) +
+          '</div></div>';
+      }).join("") + '</div></section>';
+  }).join("");
 }
 
 window.handleTimeLogRankings = function(data) {
@@ -429,16 +436,16 @@ document.addEventListener("click", () => { resetIdleTimer(); cardInput.focus(); 
 document.addEventListener("keydown", event => {
   var rankingWasVisible = top10Visible;
   resetIdleTimer();
-  if (rankingWasVisible && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && document.activeElement !== cardInput && !cardInput.disabled) {
+  if (rankingWasVisible && /^\d$/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey && document.activeElement !== cardInput && !cardInput.disabled) {
     cardInput.focus();
     cardInput.value += event.key;
     event.preventDefault();
   }
 }, true);
-cardInput.addEventListener("input", () => resetIdleTimer());
-document.addEventListener("mousemove", resetMouseIdleTimer);
-document.addEventListener("mousedown", resetMouseIdleTimer);
-document.addEventListener("click", resetMouseIdleTimer);
+cardInput.addEventListener("input", () => {
+  cardInput.value = cardInput.value.replace(/\D/g, "");
+  resetIdleTimer();
+});
 
 function updateClock() {
   var now = new Date();
@@ -633,7 +640,6 @@ window.handleAutoCheck = function(d) {
   setScheduleCountdown(d);
 }
 resetIdleTimer();
-resetMouseIdleTimer();
 loadTodayAttendance();
 var AUTO_CHECK_INTERVAL = 10000;
 autoCheck(); setInterval(autoCheck, AUTO_CHECK_INTERVAL);
@@ -666,7 +672,9 @@ function formatDutyTime(value) {
 function checkIn() {
   if (isProcessing) return; 
   if (!canCheckIn) { showMessage("error", "目前非當值時間，無法拍卡"); cardInput.value = ""; return; }
-  let card = cardInput.value.trim(); if (!card) { showMessage("error","請輸入卡號"); return; }
+  let card = cardInput.value.trim();
+  if (!card) { showMessage("error","請輸入卡號"); return; }
+  if (!/^\d+$/.test(card)) { showMessage("error","卡號只可輸入數字"); return; }
   
   isProcessing = true;
   currentCardId = card;
