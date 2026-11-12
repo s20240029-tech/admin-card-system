@@ -41,6 +41,7 @@ input:disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
 #message:empty { display:none; }
 #message.error { background:#fee; color:#c44; border: 1px solid #fcc; }
 #message.success { background:#efe; color:#084; border: 1px solid #cfc; }
+#message.short-duty { background:#fee; color:#c00; border:1px solid #f88; }
 #attendancePanel { display:none; margin-top:12px; padding-top:12px; border-top:1px solid rgba(13,141,141,.25); }
 .attendance-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
 .attendance-title { color:#0d8d8d; font-size:18px; font-weight:bold; }
@@ -120,12 +121,13 @@ input::placeholder { color:rgba(23,52,59,.62); }
 input:disabled { background:rgba(240,240,240,.5); }
 #checkBtn { background:linear-gradient(135deg,rgba(0,210,255,.82),rgba(58,123,213,.78)); border-color:rgba(255,255,255,.4); }
 #checkBtn:disabled { background:rgba(75,120,145,.35); }
-#autoHint.closed, #autoHint.open, #startLoading, #loading, #message.error, #message.success { background:rgba(255,255,255,.14); }
+#autoHint.closed, #autoHint.open, #startLoading, #loading, #message.error, #message.success, #message.short-duty { background:rgba(255,255,255,.14); }
 #autoHint.closed { color:#c44; background:rgba(255,60,60,.2); border-color:#f88; }
 #autoHint.open { color:#fff; background:linear-gradient(270deg,rgba(0,255,143,.82),rgba(0,210,255,.78)); border-color:#fff; }
 #startLoading, #loading { color:#e69500; background:rgba(255,249,230,.72); border-color:rgba(230,149,0,.32); }
 #message.error { color:#c44; background:rgba(255,238,238,.72); border-color:#fcc; }
 #message.success { color:#084; background:rgba(238,255,238,.72); border-color:#cfc; }
+#message.short-duty { color:#c00; background:rgba(255,238,238,.78); border-color:#f88; }
 .attendance-count, .attendance-row { background:rgba(255,255,255,.58); border-color:rgba(13,141,141,.2); }
 .ranking-card { background:rgba(16,33,38,.72); border-color:#24434a; }
 .top10-row { background:rgba(16,33,38,.78); }
@@ -160,7 +162,7 @@ input:disabled { background:rgba(240,240,240,.5); }
 </style>
 
 <div id="clock"></div>
-<div id="versionLabel">v3.3.1</div>
+<div id="versionLabel">v3.3.2</div>
 <div id="top10Overlay" aria-live="polite">
   <div id="rankingSystemStatus">系統狀態同步中…</div>
   <div id="rankingScheduleCountdown" aria-live="polite"></div>
@@ -251,9 +253,10 @@ function updateScheduleCountdown() {
   var isOpen = scheduleCountdownMode === "open";
   var label = isOpen ? "下一次關閉時間：" : "下一次開放時間：";
   var countdownText = label + formatScheduleCountdown(remaining, !isOpen);
-  autoHint.innerText = (isOpen ? "系統已開啟" : "系統已關閉") + "\n" + countdownText;
+  var finalWindowNotice = isOpen && remaining <= 20 * 60 * 1000 ? "\n⚠️ 最後 20 分鐘只可離開，不能開始當值" : "";
+  autoHint.innerText = (isOpen ? "系統已開啟" : "系統已關閉") + finalWindowNotice + "\n" + countdownText;
   rankingSystemStatus.innerText =
-    (isOpen ? "系統已開啟" : "系統已關閉") + "\n" + countdownText;
+    (isOpen ? "系統已開啟" : "系統已關閉") + finalWindowNotice + "\n" + countdownText;
 }
 
 function setScheduleCountdown(data) {
@@ -695,7 +698,10 @@ window.handleCheckIn = function(data) {
     } else {
       var savedStartTime = localStorage.getItem("dutyStart-" + currentCardId) || "";
       var startTime = data.startTime || currentDutyStartTime || savedStartTime || "未記錄";
-      showMessage("success", "🔚 " + data.msg + "\n\n姓名：" + data.name + "\n時段：" + data.period + "\n開始當值時間：" + formatDutyTime(startTime) + "\n結束當值時間：" + formatDutyTime(data.time) + "\n累計時數：" + data.mins + " 分鐘");
+      var dutyMinutes = Number(data.mins);
+      var messageType = Number.isFinite(dutyMinutes) && dutyMinutes < 20 ? "short-duty" : "success";
+      var durationNotice = messageType === "short-duty" ? "\n⚠️ 當值不足 20 分鐘" : "";
+      showMessage(messageType, "🔚 " + data.msg + durationNotice + "\n\n姓名：" + data.name + "\n時段：" + data.period + "\n開始當值時間：" + formatDutyTime(startTime) + "\n結束當值時間：" + formatDutyTime(data.time) + "\n累計時數：" + data.mins + " 分鐘");
       localStorage.removeItem("dutyStart-" + currentCardId);
       currentDutyStartTime = "";
     }
