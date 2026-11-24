@@ -12,6 +12,15 @@ html.idle { scrollbar-color:#555 #000; }
 html.idle::-webkit-scrollbar { background:#000; }
 html.idle::-webkit-scrollbar-track { background:#000; }
 html.idle::-webkit-scrollbar-thumb { background:#555; border-radius:8px; }
+body.rainbow-duty #message.success { animation:rainbow-message 2s linear infinite; }
+@keyframes rainbow-message {
+  0% { color:#6d0000; background:#ff9b9b; border-color:#ff5b5b; backdrop-filter:none; box-shadow:0 8px 20px rgba(255,91,91,.28); }
+  20% { color:#654700; background:#ffdf7a; border-color:#ffdc5b; backdrop-filter:none; box-shadow:0 8px 20px rgba(255,220,91,.28); }
+  40% { color:#075e2d; background:#78ef9d; border-color:#5bff88; backdrop-filter:none; box-shadow:0 8px 20px rgba(91,255,136,.28); }
+  60% { color:#00566f; background:#78dfff; border-color:#5bdcff; backdrop-filter:none; box-shadow:0 8px 20px rgba(91,220,255,.28); }
+  80% { color:#562078; background:#cc96ff; border-color:#b55bff; backdrop-filter:none; box-shadow:0 8px 20px rgba(181,91,255,.28); }
+  100% { color:#6d0000; background:#ff9b9b; border-color:#ff5b5b; backdrop-filter:none; box-shadow:0 8px 20px rgba(255,91,91,.28); }
+}
 #clock { position:fixed; top:20px; right:20px; font-size:18px; color:#000; z-index:999; font-weight:bold; }
 body.on-duty #clock { color:#000; }
 body.idle #clock { color:#000; }
@@ -162,7 +171,7 @@ input:disabled { background:rgba(240,240,240,.5); }
 </style>
 
 <div id="clock"></div>
-<div id="versionLabel">v3.3.2</div>
+<div id="versionLabel">v3.3.7</div>
 <div id="top10Overlay" aria-live="polite">
   <div id="rankingSystemStatus">系統狀態同步中…</div>
   <div id="rankingScheduleCountdown" aria-live="polite"></div>
@@ -213,6 +222,7 @@ var activeJsonpRequests = {};
 var scheduleCountdownTimer = null;
 var scheduleCountdownTarget = null;
 var scheduleCountdownMode = "";
+var rainbowTimer = null;
 
 // ⚠️⚠️⚠️ 這是最重要的一行！請把下面的網址換成你 Google Apps Script 部署出來的新網址！ ⚠️⚠️⚠️
 var API = "https://script.google.com/macros/s/AKfycbxl_8N_0Vy_zgwRWislc4yyn5x2mg9S4V9AN9I6uh7JULeTigKHOdxACTD24Iwglm3n/exec";
@@ -334,21 +344,42 @@ var rankingDefinitions = [
   { key: "octoberHours", title: "時數排名", unit: "小時" },
   { key: "novemberCount", title: "次數排名", unit: "次" },
   { key: "novemberHours", title: "時數排名", unit: "小時" },
+  { key: "decemberCount", title: "次數排名", unit: "次" },
+  { key: "decemberHours", title: "時數排名", unit: "小時" },
   { key: "yearCount", title: "次數排名", unit: "次" },
   { key: "yearHours", title: "時數排名", unit: "小時" }
 ];
-var rankingGroups = [
-  { cards: [
-    { title: "9月", metrics: [rankingDefinitions[0], rankingDefinitions[1]] },
-    { title: "10月", metrics: [rankingDefinitions[2], rankingDefinitions[3]] }
-  ] },
-  { cards: [
-    { title: "11月", metrics: [rankingDefinitions[4], rankingDefinitions[5]] }
-  ] },
-  { cards: [
-    { title: "全年", metrics: [rankingDefinitions[6], rankingDefinitions[7]] }
-  ] }
-];
+function getRankingGroups(now) {
+  var today = now || new Date();
+  var month = today.getMonth() + 1;
+  var oldCards = [
+    { title: "9月舊排名", metrics: [rankingDefinitions[0], rankingDefinitions[1]] },
+    { title: "10月舊排名", metrics: [rankingDefinitions[2], rankingDefinitions[3]] }
+  ];
+  var currentCards = [];
+
+  var novemberEnded = month >= 12 || month <= 2;
+  if (!novemberEnded) {
+    currentCards.push({ title: "11月", metrics: [rankingDefinitions[4], rankingDefinitions[5]] });
+  } else {
+    oldCards.push({ title: "11月舊排名", metrics: [rankingDefinitions[4], rankingDefinitions[5]] });
+  }
+
+  if (month === 12) {
+    currentCards.push({ title: "12月", metrics: [rankingDefinitions[6], rankingDefinitions[7]] });
+  } else if (month <= 2) {
+    oldCards.push({ title: "12月舊排名", metrics: [rankingDefinitions[6], rankingDefinitions[7]] });
+  }
+
+  var groups = [];
+  if (oldCards.length) groups.push({ title: "舊排名區", cards: oldCards });
+  if (currentCards.length) groups.push({ title: "當月排名", cards: currentCards });
+  groups.push({ cards: [
+    { title: "全年", metrics: [rankingDefinitions[8], rankingDefinitions[9]] }
+  ] });
+  return groups;
+}
+var rankingGroups = getRankingGroups();
 
 function getRankingItems(data, key) {
   var source = data && (data[key] || (data.rankings && data.rankings[key]) || (data.data && data.data[key]));
@@ -384,6 +415,7 @@ function renderRankingItems(items, unit, key) {
 
 function renderCurrentRanking() {
   if (!top10Visible || !rankingData) return;
+  rankingGroups = getRankingGroups();
   var group = rankingGroups[rankingIndex];
   var grid = document.getElementById("rankingGrid");
   var currentLists = Array.from(grid.querySelectorAll(".top10-list:not(.exiting)"));
@@ -401,7 +433,8 @@ function renderCurrentRanking() {
 }
 
 function renderRankingGroups(group) {
-  return group.cards.map(function(card) {
+  var zoneTitle = group.title ? '<div class="ranking-card-title">' + group.title + '</div>' : '';
+  return zoneTitle + group.cards.map(function(card) {
     return '<section class="ranking-card' + (group.cards.length === 1 ? ' ranking-card-wide' : '') + '">' +
       '<div class="ranking-card-title">' + card.title + '</div><div class="ranking-metrics">' +
       card.metrics.map(function(definition) {
@@ -477,7 +510,7 @@ function sendJsonp(url, requestKey) {
     setUiLock(false);
     cardInput.value = "";
     startLoading.style.display = "none";
-    showMessage("error", "⚠️ 無法連線至拍卡系統，請檢查 API 網址或部署權限。\n請確認 Google Apps Script 已部署為「任何人」可存取。");
+    showMessage("error", "⚠️ 無法連線至拍卡系統，請檢查網路連線或稍後再試");
   };
   document.body.appendChild(script);
 }
@@ -655,6 +688,18 @@ function showMessage(type, text) {
   else { m.className = type; m.innerText = text; setTimeout(() => { if (m.innerText === text) { m.className = ""; m.innerText = ""; } }, type === "error" ? 6000 : 30000); }
 }
 
+function setRainbowDuty(minutes) {
+  clearTimeout(rainbowTimer);
+  if (minutes >= 60) {
+    bodyEl.classList.add("rainbow-duty");
+    rainbowTimer = setTimeout(function() {
+      bodyEl.classList.remove("rainbow-duty");
+    }, 30000);
+  } else {
+    bodyEl.classList.remove("rainbow-duty");
+  }
+}
+
 function formatDutyTime(value) {
   var text = String(value || "").trim();
   var timeMatch = text.match(/(上午|下午)?\s*0?(\d{1,2}):(\d{2})/);
@@ -670,6 +715,12 @@ function formatDutyTime(value) {
     if (hour > 12) hour -= 12;
   }
   return date.year + "年" + (date.month + "月" + date.day + "日 ") + period + hour + ":" + timeMatch[3];
+}
+
+function formatDutyDuration(minutes) {
+  var value = Number(minutes);
+  if (!Number.isFinite(value) || value < 0) return "計算中";
+  return (value / 60).toFixed(1) + "小時 (" + value + " 分鐘)";
 }
 
 function checkIn() {
@@ -688,7 +739,10 @@ function checkIn() {
 window.handleCheckIn = function(data) {
   isProcessing = false; 
   setUiLock(false);
-  if (data.status === "ok") { 
+  var logStatus = String(data.logStatus || "").trim().toLowerCase();
+  var isLogRejected = data.status === "rejected" || data.status === "已拒絕" ||
+    logStatus === "rejected" || logStatus === "已拒絕" || logStatus === "拒絕";
+  if (data.status === "ok" && !isLogRejected) { 
     resetIdleTimer();
     if (data.type === "start") {
       currentDutyStartTime = data.time || "";
@@ -701,7 +755,8 @@ window.handleCheckIn = function(data) {
       var dutyMinutes = Number(data.mins);
       var messageType = Number.isFinite(dutyMinutes) && dutyMinutes < 20 ? "short-duty" : "success";
       var durationNotice = messageType === "short-duty" ? "\n⚠️ 當值不足 20 分鐘" : "";
-      showMessage(messageType, "🔚 " + data.msg + durationNotice + "\n\n姓名：" + data.name + "\n時段：" + data.period + "\n開始當值時間：" + formatDutyTime(startTime) + "\n結束當值時間：" + formatDutyTime(data.time) + "\n累計時數：" + data.mins + " 分鐘");
+      showMessage(messageType, "🔚 " + data.msg + durationNotice + "\n\n姓名：" + data.name + "\n時段：" + data.period + "\n開始當值時間：" + formatDutyTime(startTime) + "\n結束當值時間：" + formatDutyTime(data.time) + "\n累計時數：" + formatDutyDuration(data.mins));
+      setRainbowDuty(dutyMinutes);
       localStorage.removeItem("dutyStart-" + currentCardId);
       currentDutyStartTime = "";
     }
@@ -709,7 +764,14 @@ window.handleCheckIn = function(data) {
     loadTodayAttendance();
   } else { 
     cardInput.value = "";
-    showMessage("error", data.msg); 
+    var errorMessage = data.reason || data.msg || "拍卡失敗，請聯絡系統管理員";
+    if (isLogRejected) {
+      var rejectionReason = data.reason || "該記錄目前未獲批准";
+      errorMessage = rejectionReason === "該記錄目前未獲批准"
+        ? rejectionReason
+        : "該記錄未獲批准。原因：" + rejectionReason;
+    }
+    showMessage("error", errorMessage);
   } 
   cardInput.focus();
 }
